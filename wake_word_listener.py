@@ -9,6 +9,32 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     log_file = os.path.join(script_dir, "listener.log")
     
+    # Clear log on PC restart using boot time
+    import psutil
+    boot_time_file = os.path.join(script_dir, "boot_time.txt")
+    current_boot_time = psutil.boot_time()
+    
+    clear_log = False
+    if os.path.exists(boot_time_file):
+        try:
+            with open(boot_time_file, "r") as f:
+                saved_boot_time = f.read().strip()
+            if saved_boot_time != str(current_boot_time):
+                clear_log = True
+        except Exception:
+            clear_log = True
+    else:
+        clear_log = True
+        
+    if clear_log:
+        try:
+            with open(log_file, "w", encoding="utf-8") as f:
+                f.write("")
+            with open(boot_time_file, "w") as f:
+                f.write(str(current_boot_time))
+        except Exception:
+            pass
+            
     # Redirect print statements to a log file for debugging
     class Logger:
         def __init__(self, filename):
