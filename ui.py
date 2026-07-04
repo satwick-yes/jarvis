@@ -124,10 +124,13 @@ class _SysMetrics:
     def _get_gpu(self) -> float:
         # NVIDIA
         try:
+            kwargs = {}
+            if _OS == "Windows":
+                kwargs["creationflags"] = getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)
             r = subprocess.run(
                 ["nvidia-smi", "--query-gpu=utilization.gpu",
                  "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=2
+                capture_output=True, text=True, timeout=2, **kwargs
             )
             if r.returncode == 0:
                 vals = [float(v.strip()) for v in r.stdout.strip().split("\n") if v.strip()]
@@ -219,7 +222,8 @@ class _SysMetrics:
                 r = subprocess.run(
                     ["powershell", "-Command",
                      "(Get-WmiObject MSAcpi_ThermalZoneTemperature -Namespace root/wmi).CurrentTemperature"],
-                    capture_output=True, text=True, timeout=3
+                    capture_output=True, text=True, timeout=3,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)
                 )
                 if r.returncode == 0 and r.stdout.strip():
                     raw = float(r.stdout.strip().split("\n")[0])
@@ -243,10 +247,12 @@ class _SysMetrics:
 _metrics = _SysMetrics()
 
 class HudCanvas(QWidget):
-    def __init__(self, face_path: str, parent=None):
+    def __init__(self, face_path: str, mini_mode: bool = False, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
-        self.setMinimumSize(300, 300)
+        self.mini_mode = mini_mode
+        if not self.mini_mode:
+            self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self.setMinimumSize(80 if self.mini_mode else 300, 80 if self.mini_mode else 300)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self.muted    = False
@@ -271,7 +277,7 @@ class HudCanvas(QWidget):
 
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
-        self._tmr.start(16)
+        self._tmr.start(33)
 
     def _load_face(self, path: str):
         try:
@@ -346,7 +352,8 @@ class HudCanvas(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.fillRect(self.rect(), qcol(C.BG))
+        if not getattr(self, "mini_mode", False):
+            p.fillRect(self.rect(), qcol(C.BG))
 
         W, H = self.width(), self.height()
         cx, cy = W / 2, H / 2
@@ -451,8 +458,9 @@ class HudCanvas(QWidget):
                 p.setPen(Qt.PenStyle.NoPen)
                 p.drawEllipse(QRectF(cx - r2, cy - r2, r2 * 2, r2 * 2))
             p.setPen(QPen(qcol(C.PRI, min(255, int(self._halo * 2))), 1))
-            p.setFont(QFont("Courier New", 13, QFont.Weight.Bold))
-            p.drawText(QRectF(cx - 80, cy - 14, 160, 28),
+            fs = 8 if getattr(self, "mini_mode", False) else 13
+            p.setFont(QFont("Courier New", fs, QFont.Weight.Bold))
+            p.drawText(QRectF(cx - fw/2, cy - fw*0.1, fw, fw*0.2),
                        Qt.AlignmentFlag.AlignCenter, "J.A.R.V.I.S")
 
         # particles
@@ -482,23 +490,25 @@ class HudCanvas(QWidget):
             txt, col = f"{sym}  {self.state}", qcol(C.PRI)
 
         p.setPen(QPen(col, 1))
-        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        fs2 = 7 if getattr(self, "mini_mode", False) else 11
+        p.setFont(QFont("Courier New", fs2, QFont.Weight.Bold))
         p.drawText(QRectF(0, sy, W, 26), Qt.AlignmentFlag.AlignCenter, txt)
 
         # waveform
-        wy = sy + 30
-        N, bw = 36, 8
+        wy = sy + (10 if getattr(self, "mini_mode", False) else 30)
+        N = 12 if getattr(self, "mini_mode", False) else 36
+        bw = 4 if getattr(self, "mini_mode", False) else 8
         wx0 = (W - N * bw) / 2
         for i in range(N):
             if self.muted:
                 hgt, cl = 2, qcol(C.MUTED_C)
             elif self.speaking:
-                hgt = random.randint(3, 20)
-                cl  = qcol(C.PRI) if hgt > 12 else qcol(C.PRI_DIM)
+                hgt = random.randint(3, 20 if not getattr(self, "mini_mode", False) else 10)
+                cl  = qcol(C.PRI) if hgt > (12 if not getattr(self, "mini_mode", False) else 6) else qcol(C.PRI_DIM)
             else:
-                hgt = int(3 + 2 * math.sin(self._tick * 0.09 + i * 0.6))
+                hgt = int((3 if not getattr(self, "mini_mode", False) else 1) + 2 * math.sin(self._tick * 0.09 + i * 0.6))
                 cl  = qcol(C.BORDER_B)
-            p.fillRect(QRectF(wx0 + i * bw, wy + 20 - hgt, bw - 1, hgt), cl)
+            p.fillRect(QRectF(wx0 + i * bw, wy + (20 if not getattr(self, "mini_mode", False) else 10) - hgt, bw - 1, hgt), cl)
 
 class MetricBar(QWidget):
 
@@ -1013,60 +1023,83 @@ class MainWindow(QMainWindow):
     _log_sig   = pyqtSignal(str)
     _state_sig = pyqtSignal(str)
 
-    def __init__(self, face_path: str):
+    def __init__(self, face_path: str, mini_mode: bool = False):
         super().__init__()
+        self.mini_mode = mini_mode
         self.setWindowTitle("Jarvis")
-        self.setMinimumSize(_MIN_W, _MIN_H)
-        self.resize(_DEFAULT_W, _DEFAULT_H)
-
+        
         screen = QApplication.primaryScreen().availableGeometry()
-        self.move(
-            (screen.width()  - _DEFAULT_W) // 2,
-            (screen.height() - _DEFAULT_H) // 2,
-        )
+        if self.mini_mode:
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+            size = 80
+            self.setMinimumSize(size, size)
+            self.resize(size, size)
+            # Move it to the bottom right corner
+            self.move(
+                screen.width() - size - 20,
+                screen.height() - size - 40,
+            )
+        else:
+            self.setMinimumSize(_MIN_W, _MIN_H)
+            self.resize(_DEFAULT_W, _DEFAULT_H)
+            self.move(
+                (screen.width()  - _DEFAULT_W) // 2,
+                (screen.height() - _DEFAULT_H) // 2,
+            )
 
         self.on_text_command  = None
         self._muted           = False
         self._current_file: str | None = None
 
         central = QWidget()
-        central.setStyleSheet(f"background: {C.BG};")
+        if self.mini_mode:
+            central.setStyleSheet("background: transparent;")
+        else:
+            central.setStyleSheet(f"background: {C.BG};")
         self.setCentralWidget(central)
 
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        root.addWidget(self._build_header())
+        
+        if not self.mini_mode:
+            root.addWidget(self._build_header())
 
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
 
-        self._left_panel = self._build_left_panel()
-        body.addWidget(self._left_panel, stretch=0)
+        if not self.mini_mode:
+            self._left_panel = self._build_left_panel()
+            body.addWidget(self._left_panel, stretch=0)
 
-        self.hud = HudCanvas(face_path)
+        self.hud = HudCanvas(face_path, mini_mode=self.mini_mode)
         self.hud.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         body.addWidget(self.hud, stretch=5)
 
-        self._right_panel = self._build_right_panel()
-        body.addWidget(self._right_panel, stretch=0)
+        if not self.mini_mode:
+            self._right_panel = self._build_right_panel()
+            body.addWidget(self._right_panel, stretch=0)
 
         root.addLayout(body, stretch=1)
-        root.addWidget(self._build_footer())
+        if not self.mini_mode:
+            root.addWidget(self._build_footer())
 
-        self._clock_tmr = QTimer(self)
-        self._clock_tmr.timeout.connect(self._tick_clock)
-        self._clock_tmr.start(1000)
-        self._tick_clock()
+        if not self.mini_mode:
+            self._clock_tmr = QTimer(self)
+            self._clock_tmr.timeout.connect(self._tick_clock)
+            self._clock_tmr.start(1000)
+            self._tick_clock()
 
-        # Metrik güncelleme timer'ı
-        self._metric_tmr = QTimer(self)
-        self._metric_tmr.timeout.connect(self._update_metrics)
-        self._metric_tmr.start(2000)
-        self._update_metrics()
+            # Metrik güncelleme timer'ı
+            self._metric_tmr = QTimer(self)
+            self._metric_tmr.timeout.connect(self._update_metrics)
+            self._metric_tmr.start(2000)
+            self._update_metrics()
 
-        self._log_sig.connect(self._log.append_log)
+            self._log_sig.connect(self._log.append_log)
+            
         self._state_sig.connect(self._apply_state)
 
         self._overlay: SetupOverlay | None = None
@@ -1076,8 +1109,9 @@ class MainWindow(QMainWindow):
 
         sc_mute = QShortcut(QKeySequence("F4"), self)
         sc_mute.activated.connect(self._toggle_mute)
-        sc_full = QShortcut(QKeySequence("F11"), self)
-        sc_full.activated.connect(self._toggle_fullscreen)
+        if not self.mini_mode:
+            sc_full = QShortcut(QKeySequence("F11"), self)
+            sc_full.activated.connect(self._toggle_fullscreen)
 
     def _toggle_fullscreen(self):
         if self.isFullScreen():
@@ -1489,10 +1523,10 @@ class _RootShim:
 
 
 class JarvisUI:
-    def __init__(self, face_path: str, size=None):
+    def __init__(self, face_path: str, size=None, mini_mode: bool = False):
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
-        self._win = MainWindow(face_path)
+        self._win = MainWindow(face_path, mini_mode=mini_mode)
         self._win.show()
         self.root = _RootShim(self._app)
 

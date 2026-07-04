@@ -623,6 +623,53 @@ def computer_settings(
                 f"Please confirm by calling again with confirmed=yes."
             )
 
+    if action == "close_app":
+        app_to_close = str(value or "").strip().lower()
+        if not app_to_close and description:
+            if "close" in description.lower():
+                app_to_close = description.lower().replace("close", "").replace("app", "").strip()
+                
+        if app_to_close and app_to_close not in ("none", "null"):
+            closed_something = False
+            try:
+                import psutil
+                for proc in psutil.process_iter(['name']):
+                    try:
+                        name = proc.info.get('name', '').lower()
+                        if not name: continue
+                        name_no_ext = name.replace('.exe', '').replace('.app', '')
+                        if app_to_close in name_no_ext or name_no_ext in app_to_close:
+                            proc.kill()
+                            closed_something = True
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+            except Exception as e:
+                print(f"[Settings] psutil kill failed: {e}")
+            
+            if closed_something:
+                return f"Closed application '{app_to_close}' successfully."
+                
+            try:
+                import subprocess
+                if _OS == "Windows":
+                    res = subprocess.run(["taskkill", "/F", "/IM", f"{app_to_close}.exe"], capture_output=True)
+                    if res.returncode == 0: return f"Closed '{app_to_close}'."
+                elif _OS == "Darwin":
+                    res = subprocess.run(["pkill", "-i", app_to_close], capture_output=True)
+                    if res.returncode == 0: return f"Closed '{app_to_close}'."
+                elif _OS == "Linux":
+                    res = subprocess.run(["killall", "-I", app_to_close], capture_output=True)
+                    if res.returncode == 0: return f"Closed '{app_to_close}'."
+            except Exception:
+                pass
+
+        # Fallback to alt+f4
+        close_app()
+        if app_to_close:
+            return f"Pressed Alt+F4 to close current window (process '{app_to_close}' not found)."
+        return "Pressed Alt+F4 to close current window."
+
+
     if action == "volume_set":
         try:
             volume_set(int(value or 50))

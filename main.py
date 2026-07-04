@@ -1,14 +1,50 @@
 import sys
-if sys.stdout.encoding != 'utf-8':
+if sys.stdout and sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding != 'utf-8':
+if sys.stderr and sys.stderr.encoding != 'utf-8':
     sys.stderr.reconfigure(encoding='utf-8')
+
+class _DummyIO:
+    def __init__(self):
+        self.log = open("crash.log", "a", encoding="utf-8")
+    def write(self, msg, *args, **kwargs):
+        try:
+            self.log.write(str(msg))
+            self.log.flush()
+        except:
+            pass
+    def flush(self):
+        try:
+            self.log.flush()
+        except:
+            pass
+
+if getattr(sys, 'stdout', None) is None:
+    sys.stdout = _DummyIO()
+if getattr(sys, 'stderr', None) is None:
+    sys.stderr = _DummyIO()
 import asyncio
 import threading
 import json
 import sys
 import traceback
+import os
+import psutil
 from pathlib import Path
+
+def _enforce_single_instance():
+    current_pid = os.getpid()
+    for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            name = p.info.get('name')
+            if p.info['pid'] != current_pid and name and 'python' in name.lower():
+                cmd = p.info.get('cmdline')
+                if cmd and any('main.py' in str(c) for c in cmd):
+                    p.kill()
+        except Exception:
+            pass
+
+_enforce_single_instance()
 
 import sounddevice as sd
 from google import genai
@@ -51,7 +87,7 @@ def get_base_dir():
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-latest"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -963,7 +999,7 @@ class JarvisLive:
             await asyncio.sleep(3)
 
 def main():
-    ui = JarvisUI("face.png")
+    ui = JarvisUI("face.png", mini_mode=True)
 
     def runner():
         ui.wait_for_api_key()
