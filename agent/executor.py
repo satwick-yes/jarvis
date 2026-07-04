@@ -176,6 +176,10 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
     if tool == "open_app":
         from actions.open_app import open_app
         return open_app(parameters=parameters, player=None) or "Done."
+        
+    elif tool == "close_app":
+        from actions.close_app import close_app
+        return close_app(parameters=parameters, player=None) or "Done."
 
     elif tool == "web_search":
         from actions.web_search import web_search

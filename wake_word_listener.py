@@ -104,8 +104,8 @@ def main():
             wake_words = ["jarvis", "jervis", "tarvis", "travis", "darvis", "charvis", "javed", "service"]
             if any(word in text for word in wake_words):
                 print("Wake word detected! Launching Jarvis Console...")
-                # Launch Jarvis with the console window visible
-                os.startfile(os.path.join(script_dir, "jarvis_console.bat"))
+                # Launch Jarvis in the background
+                os.startfile(os.path.join(script_dir, "start_jarvis.bat"))
                 # Sleep to prevent launching it multiple times immediately
                 time.sleep(10)
                 
