@@ -22,3 +22,10 @@ youtube-transcript-api
 pywinauto
 pyaudio
 PyQt6
+PyPDF2
+python-docx
+pandas
+pdfplumber
+python-pptx
+pydub
+reportlab
