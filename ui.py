@@ -1121,8 +1121,8 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._overlay and self._overlay.isVisible():
-            ow, oh = 460, 390
+        if self._overlay and self._overlay.isVisible() and not getattr(self, "mini_mode", False):
+            ow, oh = 460, 430
             cw = self.centralWidget()
             self._overlay.setGeometry(
                 (cw.width()  - ow) // 2,
