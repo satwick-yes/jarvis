@@ -240,6 +240,10 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
         from actions.computer_control import computer_control
         return computer_control(parameters=parameters, player=None) or "Done."
 
+    elif tool == "advanced_computer_use":
+        from actions.claude_computer_use import advanced_computer_use
+        return advanced_computer_use(parameters=parameters, player=None, speak=speak) or "Done."
+
     elif tool == "generated_code":
         description = parameters.get("description", "")
         if not description:

@@ -1483,14 +1483,25 @@ class MainWindow(QMainWindow):
             return False
 
     def _show_setup(self):
-        ov = SetupOverlay(self.centralWidget())
-        cw = self.centralWidget()
-        ow, oh = 460, 430
-        ov.setGeometry(
-            (cw.width()  - ow) // 2,
-            (cw.height() - oh) // 2,
-            ow, oh,
-        )
+        if getattr(self, "mini_mode", False):
+            ov = SetupOverlay(None)
+            ov.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+            screen = QApplication.primaryScreen().availableGeometry()
+            ow, oh = 460, 430
+            ov.setGeometry(
+                (screen.width() - ow) // 2,
+                (screen.height() - oh) // 2,
+                ow, oh,
+            )
+        else:
+            ov = SetupOverlay(self.centralWidget())
+            cw = self.centralWidget()
+            ow, oh = 460, 430
+            ov.setGeometry(
+                (cw.width()  - ow) // 2,
+                (cw.height() - oh) // 2,
+                ow, oh,
+            )
         ov.done.connect(self._on_setup_done)
         ov.show()
         self._overlay = ov

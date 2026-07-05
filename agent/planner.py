@@ -69,13 +69,15 @@ computer_settings
   value: string (optional)
 
 computer_control
-  action: "type" | "click" | "hotkey" | "press" | "scroll" | "screenshot" | "screen_find" | "screen_click" (required)
+  action: "type" | "click" | "hotkey" | "press" | "scroll" | "screenshot" | "screen_find" | "screen_click" | "wait" | "focus_window" (required)
   text: string (for type)
   x, y: int (for click)
   keys: string (for hotkey, e.g. "ctrl+c")
   key: string (for press)
   direction: "up" | "down" (for scroll)
   description: string (for screen_find/screen_click)
+  seconds: float (for wait)
+  title: string (for focus_window)
 
 screen_process
   text: string (required) — what to analyze or ask about the screen
@@ -118,6 +120,10 @@ code_helper
 dev_agent
   description: string (required)
   language: string (optional)
+
+advanced_computer_use
+  goal: string (required) — natural language description of the visual/mouse task to perform autonomously on the screen
+
 EXAMPLES:
 
 Goal: "research mechanical engineering and save it to a notepad file"
@@ -158,6 +164,15 @@ Goal: "Open the clock and set a reminder for 30 minutes later"
 Steps:
 
 reminder | date: [today], time: [now+30min], message: "Reminder"
+
+Goal: "start streaming on Discord"
+Steps:
+
+computer_control | action: focus_window, title: "Discord"
+computer_control | action: screen_click, description: "Share Your Screen button in Discord voice channel controls"
+computer_control | action: wait, seconds: 2
+computer_control | action: screen_click, description: "the specific screen or window I want to share in the popup"
+computer_control | action: screen_click, description: "Go Live button at the bottom of the popup"
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation, no code blocks:
 {

@@ -9,6 +9,15 @@ import time
 import random
 from pathlib import Path
 
+import platform
+import ctypes
+
+if platform.system() == "Windows":
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
 try:
     import pyautogui
     pyautogui.FAILSAFE = True
@@ -164,9 +173,13 @@ def _smart_type(text: str, clear_first: bool = True) -> str:
 
 def _click(x=None, y=None, button: str = "left", clicks: int = 1) -> str:
     _require_pyautogui()
-    if x is not None and y is not None:
-        pyautogui.click(x, y, button=button, clicks=clicks)
-        return f"{'Double-c' if clicks == 2 else 'C'}licked ({x}, {y}) [{button}]"
+    if x not in (None, "") and y not in (None, ""):
+        try:
+            x, y = int(x), int(y)
+            pyautogui.click(x, y, button=button, clicks=clicks)
+            return f"{'Double-c' if clicks == 2 else 'C'}licked ({x}, {y}) [{button}]"
+        except ValueError:
+            pass
     pyautogui.click(button=button, clicks=clicks)
     return f"Clicked at current position [{button}]"
 
@@ -400,12 +413,12 @@ def computer_control(
             return _click(params.get("x"), params.get("y"), "right", 1)
 
         if action == "move":
-            return _move(int(params.get("x", 0)), int(params.get("y", 0)))
+            return _move(int(params.get("x") or 0), int(params.get("y") or 0))
 
         if action == "drag":
             return _drag(
-                int(params.get("x1", 0)), int(params.get("y1", 0)),
-                int(params.get("x2", 0)), int(params.get("y2", 0)),
+                int(params.get("x1") or 0), int(params.get("y1") or 0),
+                int(params.get("x2") or 0), int(params.get("y2") or 0),
             )
 
         if action == "hotkey":

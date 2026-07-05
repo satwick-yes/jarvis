@@ -71,6 +71,7 @@ from actions.code_helper       import code_helper
 from actions.dev_agent         import dev_agent
 from actions.web_search        import web_search as web_search_action
 from actions.computer_control  import computer_control
+from actions.claude_computer_use import advanced_computer_use
 from actions.game_updater      import game_updater
 
 from actions.image_generator   import generate_image
@@ -146,7 +147,11 @@ TOOL_DECLARATIONS = [
             "properties": {
                 "app_name": {
                     "type": "STRING",
-                    "description": "Exact name of the application (e.g. 'WhatsApp', 'Chrome', 'Spotify')"
+                    "description": "Exact name of the application (e.g. 'WhatsApp', 'Chrome', 'Spotify', 'Brave')"
+                },
+                "url": {
+                    "type": "STRING",
+                    "description": "Optional URL to open directly in the browser (e.g. 'https://youtube.com')"
                 }
             },
             "required": ["app_name"]
@@ -356,6 +361,17 @@ TOOL_DECLARATIONS = [
             "properties": {
                 "goal":     {"type": "STRING", "description": "Complete description of what to accomplish"},
                 "priority": {"type": "STRING", "description": "low | normal | high (default: normal)"}
+            },
+            "required": ["goal"]
+        }
+    },
+    {
+        "name": "advanced_computer_use",
+        "description": "Advanced autonomous computer use loop via Claude 3.5. Delegate tasks that require complex reasoning, mouse, keyboard, and screen reading.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "goal": {"type": "STRING", "description": "High-level goal for the agent to accomplish on the screen"}
             },
             "required": ["goal"]
         }
@@ -788,6 +804,10 @@ class JarvisLive:
 
             elif name == "computer_control":
                 r = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "advanced_computer_use":
+                r = await loop.run_in_executor(None, lambda: advanced_computer_use(parameters=args, player=self.ui, speak=self.speak))
                 result = r or "Done."
 
             elif name == "game_updater":

@@ -80,7 +80,14 @@ def _is_running(app_name: str) -> bool:
     return False
 
 
-def _launch_windows(app_name: str) -> bool:
+def _launch_windows(app_name: str, url: str = "") -> bool:
+    if url:
+        try:
+            subprocess.run(["cmd", "/c", "start", "", app_name, url], timeout=5)
+            return True
+        except Exception:
+            pass
+
     try:
         import pyautogui
         pyautogui.PAUSE = 0.1
@@ -95,9 +102,12 @@ def _launch_windows(app_name: str) -> bool:
         print(f"[open_app] ⚠️ Windows launch failed: {e}")
         return False
 
-def _launch_macos(app_name: str) -> bool:
+def _launch_macos(app_name: str, url: str = "") -> bool:
     try:
-        result = subprocess.run(["open", "-a", app_name], capture_output=True, timeout=8)
+        cmd = ["open", "-a", app_name]
+        if url:
+            cmd.append(url)
+        result = subprocess.run(cmd, capture_output=True, timeout=8)
         if result.returncode == 0:
             time.sleep(1.0)
             return True
@@ -105,7 +115,10 @@ def _launch_macos(app_name: str) -> bool:
         pass
 
     try:
-        result = subprocess.run(["open", "-a", f"{app_name}.app"], capture_output=True, timeout=8)
+        cmd = ["open", "-a", f"{app_name}.app"]
+        if url:
+            cmd.append(url)
+        result = subprocess.run(cmd, capture_output=True, timeout=8)
         if result.returncode == 0:
             time.sleep(1.0)
             return True
@@ -127,7 +140,7 @@ def _launch_macos(app_name: str) -> bool:
 
 
 
-def _launch_linux(app_name: str) -> bool:
+def _launch_linux(app_name: str, url: str = "") -> bool:
     binary = (
         shutil.which(app_name) or
         shutil.which(app_name.lower()) or
@@ -135,14 +148,20 @@ def _launch_linux(app_name: str) -> bool:
     )
     if binary:
         try:
-            subprocess.Popen([binary], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            cmd = [binary]
+            if url:
+                cmd.append(url)
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(1.0)
             return True
         except Exception:
             pass
 
     try:
-        subprocess.run(["xdg-open", app_name], capture_output=True, timeout=5)
+        if url:
+            subprocess.run([binary or app_name, url], capture_output=True, timeout=5)
+        else:
+            subprocess.run(["xdg-open", app_name], capture_output=True, timeout=5)
         return True
     except Exception:
         pass
@@ -171,6 +190,7 @@ def open_app(
     session_memory=None,
 ) -> str:
     app_name = (parameters or {}).get("app_name", "").strip()
+    url = (parameters or {}).get("url", "").strip()
 
     if not app_name:
         return "Please specify which application to open, sir."
@@ -182,19 +202,19 @@ def open_app(
         return f"Unsupported OS: {system}"
 
     normalized = _normalize(app_name)
-    print(f"[open_app] 🚀 Launching: {app_name} → {normalized} ({system})")
+    print(f"[open_app] 🚀 Launching: {app_name} → {normalized} ({system}) with URL: {url}")
 
     if player:
         player.write_log(f"[open_app] {app_name}")
 
     try:
-        success = launcher(normalized)
+        success = launcher(normalized, url)
 
         if success:
             return f"Opened {app_name} successfully, sir."
 
         if normalized != app_name:
-            success = launcher(app_name)
+            success = launcher(app_name, url)
             if success:
                 return f"Opened {app_name} successfully, sir."
 
