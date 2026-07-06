@@ -8,3 +8,5 @@ venv/
 .env
 .venv/
 config/api_keys.json
+*.log
+*.pid

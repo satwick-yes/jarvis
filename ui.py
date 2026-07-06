@@ -46,27 +46,27 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 
 class C:
-    BG        = "#00060a"
-    PANEL     = "#010d14"
-    PANEL2    = "#010f18"
-    BORDER    = "#0d3347"
-    BORDER_B  = "#1a5c7a"
-    BORDER_A  = "#0f4060"
-    PRI       = "#00d4ff"
-    PRI_DIM   = "#007a99"
-    PRI_GHO   = "#001f2e"
-    ACC       = "#ff6b00"
-    ACC2      = "#ffcc00"
-    GREEN     = "#00ff88"
-    GREEN_D   = "#00aa55"
-    RED       = "#ff3355"
-    MUTED_C   = "#ff3366"
-    TEXT      = "#8ffcff"
-    TEXT_DIM  = "#3a8a9a"
-    TEXT_MED  = "#5ab8cc"
-    WHITE     = "#d8f8ff"
-    DARK      = "#000d14"
-    BAR_BG    = "#011520"
+    BG        = "#0a0300"
+    PANEL     = "#140600"
+    PANEL2    = "#1a0800"
+    BORDER    = "#471d00"
+    BORDER_B  = "#7a3100"
+    BORDER_A  = "#602600"
+    PRI       = "#ff7700"
+    PRI_DIM   = "#994700"
+    PRI_GHO   = "#2e1500"
+    ACC       = "#ffbb00"
+    ACC2      = "#ff4400"
+    GREEN     = "#aaff00"
+    GREEN_D   = "#55aa00"
+    RED       = "#ff3333"
+    MUTED_C   = "#8c8c8c"
+    TEXT      = "#ffe5cc"
+    TEXT_DIM  = "#998066"
+    TEXT_MED  = "#ccaa88"
+    WHITE     = "#fff5eb"
+    DARK      = "#0a0300"
+    BAR_BG    = "#1a0700"
 
 
 def qcol(h: str, a: int = 255) -> QColor:
@@ -258,6 +258,7 @@ class HudCanvas(QWidget):
         self.muted    = False
         self.speaking = False
         self.state    = "INITIALISING"
+        self.mic_level = 0.0
 
         self._tick       = 0
         self._scale      = 1.0
@@ -265,44 +266,45 @@ class HudCanvas(QWidget):
         self._halo       = 55.0
         self._tgt_halo   = 55.0
         self._last_t     = time.time()
-        self._scan       = 0.0
-        self._scan2      = 180.0
-        self._rings      = [0.0, 120.0, 240.0]
-        self._pulses: list[float] = [0.0, 50.0, 100.0]
+        
+        # Chaotic rings array
+        self._chaos_rings = []
+        for i in range(35):
+            self._chaos_rings.append({
+                "rad": random.uniform(0.2, 0.55),
+                "tilt": random.uniform(0, 360),
+                "rot": random.uniform(0, 360),
+                "spd": random.uniform(1.0, 5.0) * random.choice([-1, 1]),
+                "thickness": random.uniform(0.5, 2.0),
+                "alpha": random.randint(30, 180),
+                "is_dashed": random.random() > 0.4,
+                "stretch": random.uniform(0.5, 0.95),
+            })
+            
         self._blink      = True
         self._blink_tick = 0
         self._particles: list[list[float]] = []
-        self._face_px: QPixmap | None = None
-        self._load_face(face_path)
 
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
         self._tmr.start(33)
 
-    def _load_face(self, path: str):
-        try:
-            from PIL import Image, ImageDraw
-            import io
-            img = Image.open(path).convert("RGBA")
-            sz  = min(img.size)
-            img = img.resize((sz, sz), Image.LANCZOS)
-            mk  = Image.new("L", (sz, sz), 0)
-            ImageDraw.Draw(mk).ellipse((2, 2, sz - 2, sz - 2), fill=255)
-            img.putalpha(mk)
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            px = QPixmap(); px.loadFromData(buf.getvalue())
-            self._face_px = px
-        except Exception:
-            self._face_px = None
-
     def _step(self):
         self._tick += 1
         now = time.time()
-        if now - self._last_t > (0.12 if self.speaking else 0.5):
-            if self.speaking:
-                self._tgt_scale = random.uniform(1.06, 1.14)
-                self._tgt_halo  = random.uniform(145, 190)
+        
+        listening_active = self.state == "LISTENING" and self.mic_level > 0.05
+        is_active = self.speaking or listening_active
+        
+        if now - self._last_t > (0.12 if is_active else 0.5):
+            if is_active:
+                if listening_active:
+                    base = 1.06 + self.mic_level * 0.15
+                    self._tgt_scale = random.uniform(base, base + 0.08)
+                    self._tgt_halo  = random.uniform(145 + self.mic_level*80, 190 + self.mic_level*80)
+                else:
+                    self._tgt_scale = random.uniform(1.06, 1.14)
+                    self._tgt_halo  = random.uniform(145, 190)
             elif self.muted:
                 self._tgt_scale = random.uniform(0.998, 1.002)
                 self._tgt_halo  = random.uniform(15, 28)
@@ -311,35 +313,32 @@ class HudCanvas(QWidget):
                 self._tgt_halo  = random.uniform(48, 68)
             self._last_t = now
 
-        sp = 0.38 if self.speaking else 0.15
+        sp = 0.38 if is_active else 0.15
         self._scale += (self._tgt_scale - self._scale) * sp
         self._halo  += (self._tgt_halo  - self._halo)  * sp
 
-        speeds = [1.3, -0.9, 2.0] if self.speaking else [0.55, -0.35, 0.9]
-        for i, spd in enumerate(speeds):
-            self._rings[i] = (self._rings[i] + spd) % 360
-
-        self._scan  = (self._scan  + (3.0 if self.speaking else 1.3)) % 360
-        self._scan2 = (self._scan2 + (-2.0 if self.speaking else -0.75)) % 360
+        spd_mult = (2.5 + self.mic_level * 3.0) if listening_active else (2.5 if self.speaking else 1.0)
+        for r in self._chaos_rings:
+            r["rot"] = (r["rot"] + r["spd"] * spd_mult) % 360
 
         fw  = min(self.width(), self.height())
-        lim = fw * 0.74
-        spd = 4.2 if self.speaking else 2.0
-        self._pulses = [r + spd for r in self._pulses if r + spd < lim]
-        if len(self._pulses) < 3 and random.random() < (0.07 if self.speaking else 0.025):
-            self._pulses.append(0.0)
-
-        if self.speaking and random.random() < 0.28:
-            cx, cy = self.width() / 2, self.height() / 2
-            ang = random.uniform(0, 2 * math.pi)
-            r_s = fw * 0.28
-            self._particles.append([
-                cx + math.cos(ang) * r_s, cy + math.sin(ang) * r_s,
-                math.cos(ang) * random.uniform(0.9, 2.4),
-                math.sin(ang) * random.uniform(0.9, 2.4) - 0.4, 1.0,
-            ])
+        
+        # Intense particle spray
+        if random.random() < (0.8 if is_active else 0.25):
+            count = int(2 + self.mic_level * 8) if listening_active else (4 if self.speaking else 1)
+            for _ in range(count):
+                cx, cy = self.width() / 2, self.height() / 2
+                ang = random.uniform(0, 2 * math.pi)
+                r_s = fw * random.uniform(0.05, 0.4)
+                self._particles.append([
+                    cx + math.cos(ang) * r_s, cy + math.sin(ang) * r_s,
+                    math.cos(ang) * random.uniform(1.0, 5.0),
+                    math.sin(ang) * random.uniform(1.0, 5.0), 
+                    1.0,
+                ])
+                
         self._particles = [
-            [p[0]+p[2], p[1]+p[3], p[2]*0.97, p[3]*0.97, p[4]-0.028]
+            [p[0]+p[2], p[1]+p[3], p[2]*0.97, p[3]*0.97, p[4]-0.025]
             for p in self._particles if p[4] > 0
         ]
 
@@ -359,119 +358,82 @@ class HudCanvas(QWidget):
         cx, cy = W / 2, H / 2
         fw = min(W, H)
 
-        # grid dots
-        p.setPen(QPen(qcol(C.PRI_GHO), 1))
-        for x in range(0, W, 48):
-            for y in range(0, H, 48):
-                p.drawPoint(x, y)
+        # Draw central fiery core
+        core_rad = fw * 0.48 * self._scale
+        grad = QRadialGradient(QPointF(cx, cy), core_rad)
+        
+        core_halo = self._halo / 255.0
+        glow_alpha = min(255, int(120 + 135 * core_halo))
+        
+        grad.setColorAt(0.0, QColor(255, 255, 230, glow_alpha))
+        grad.setColorAt(0.15, QColor(255, 200, 0, glow_alpha))
+        grad.setColorAt(0.4, QColor(255, 100, 0, int(glow_alpha * 0.8)))
+        grad.setColorAt(0.7, QColor(100, 20, 0, int(glow_alpha * 0.3)))
+        grad.setColorAt(1.0, QColor(0, 0, 0, 0))
+        
+        p.setBrush(QBrush(grad))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(QRectF(cx - core_rad, cy - core_rad, core_rad * 2, core_rad * 2))
 
-        r_face = fw * 0.31
+        # Draw chaotic orbital rings
+        for r in self._chaos_rings:
+            p.save()
+            p.translate(cx, cy)
+            p.rotate(r["tilt"] + (r["rot"] * 0.15))
+            
+            rx = fw * r["rad"] * self._scale
+            ry = rx * r["stretch"]
+            
+            c = QColor(C.PRI)
+            # Boost alpha if near the center
+            rad_boost = 1.0 if r["rad"] > 0.3 else 1.5
+            a_val = min(255, int(r["alpha"] * core_halo * 1.8 * rad_boost))
+            c.setAlpha(a_val)
+            
+            pen = QPen(c, r["thickness"])
+            if r["is_dashed"]:
+                pen.setStyle(Qt.PenStyle.DashLine)
+                pen.setDashPattern([random.randint(2, 10), random.randint(2, 10)])
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            
+            p.rotate(r["rot"])
+            p.drawEllipse(QRectF(-rx, -ry, rx * 2, ry * 2))
+            
+            p.restore()
 
-        # halo glow
-        for i in range(10):
-            r   = r_face * (1.8 - i * 0.08)
-            frc = 1.0 - i / 10
-            a   = max(0, min(255, int(self._halo * 0.085 * frc)))
-            col = qcol(C.MUTED_C if self.muted else C.PRI, a)
-            p.setPen(QPen(col, 1.5)); p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawEllipse(QRectF(cx - r, cy - r, r * 2, r * 2))
-
-        # pulse rings
-        for pr in self._pulses:
-            a   = max(0, int(230 * (1.0 - pr / (fw * 0.74))))
-            col = qcol(C.MUTED_C if self.muted else C.PRI, a)
-            p.setPen(QPen(col, 1.5)); p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawEllipse(QRectF(cx - pr, cy - pr, pr * 2, pr * 2))
-
-        # spinning arc rings
-        for idx, (r_frac, w_r, arc_l, gap) in enumerate(
-            [(0.48, 3, 115, 78), (0.40, 2, 78, 55), (0.32, 1, 56, 40)]
-        ):
-            ring_r = fw * r_frac
-            base   = self._rings[idx]
-            a_val  = max(0, min(255, int(self._halo * (1.0 - idx * 0.18))))
-            col    = qcol(C.MUTED_C if self.muted else C.PRI, a_val)
-            p.setPen(QPen(col, w_r)); p.setBrush(Qt.BrushStyle.NoBrush)
-            angle = base
-            rect  = QRectF(cx - ring_r, cy - ring_r, ring_r * 2, ring_r * 2)
-            while angle < base + 360:
-                p.drawArc(rect, int(angle * 16), int(arc_l * 16))
-                angle += arc_l + gap
-
-        # scanners
-        sr = fw * 0.50
-        sa = min(255, int(self._halo * 1.5))
-        ex = 75 if self.speaking else 44
-        p.setPen(QPen(qcol(C.MUTED_C if self.muted else C.PRI, sa), 2.5))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        srect = QRectF(cx - sr, cy - sr, sr * 2, sr * 2)
-        p.drawArc(srect, int(self._scan * 16), int(ex * 16))
-        p.setPen(QPen(qcol(C.ACC, sa // 2), 1.5))
-        p.drawArc(srect, int(self._scan2 * 16), int(ex * 16))
-
-        # tick marks
-        t_out, t_in = fw * 0.497, fw * 0.474
-        p.setPen(QPen(qcol(C.PRI, 140), 1))
-        for deg in range(0, 360, 10):
-            rad = math.radians(deg)
-            inn = t_in if deg % 30 == 0 else t_in + 6
-            p.drawLine(
-                QPointF(cx + t_out * math.cos(rad), cy - t_out * math.sin(rad)),
-                QPointF(cx + inn  * math.cos(rad), cy - inn  * math.sin(rad)),
-            )
-
-        # crosshair
-        ch_r, gap_h = fw * 0.51, fw * 0.16
-        p.setPen(QPen(qcol(C.PRI, int(self._halo * 0.5)), 1))
-        p.drawLine(QPointF(cx - ch_r, cy), QPointF(cx - gap_h, cy))
-        p.drawLine(QPointF(cx + gap_h, cy), QPointF(cx + ch_r, cy))
-        p.drawLine(QPointF(cx, cy - ch_r), QPointF(cx, cy - gap_h))
-        p.drawLine(QPointF(cx, cy + gap_h), QPointF(cx, cy + ch_r))
-
-        # corner brackets
-        bl = 24
-        bc = qcol(C.PRI, 210)
-        hl, hr = cx - fw // 2, cx + fw // 2
-        ht, hb = cy - fw // 2, cy + fw // 2
-        p.setPen(QPen(bc, 2))
-        for bx, by, dx, dy in [(hl,ht,1,1),(hr,ht,-1,1),(hl,hb,1,-1),(hr,hb,-1,-1)]:
-            p.drawLine(QPointF(bx, by), QPointF(bx + dx * bl, by))
-            p.drawLine(QPointF(bx, by), QPointF(bx, by + dy * bl))
-
-        # face
-        if self._face_px:
-            fsz    = int(fw * 0.62 * self._scale)
-            scaled = self._face_px.scaled(
-                fsz, fsz,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            p.drawPixmap(int(cx - fsz / 2), int(cy - fsz / 2), scaled)
-        else:
-            orb_r = int(fw * 0.27 * self._scale)
-            oc    = (200, 0, 50) if self.muted else (0, 60, 110)
-            for i in range(8, 0, -1):
-                r2  = int(orb_r * i / 8)
-                frc = i / 8
-                a   = max(0, min(255, int(self._halo * 1.1 * frc)))
-                p.setBrush(QBrush(QColor(int(oc[0]*frc), int(oc[1]*frc), int(oc[2]*frc), a)))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(QRectF(cx - r2, cy - r2, r2 * 2, r2 * 2))
-            p.setPen(QPen(qcol(C.PRI, min(255, int(self._halo * 2))), 1))
-            fs = 8 if getattr(self, "mini_mode", False) else 13
-            p.setFont(QFont("Courier New", fs, QFont.Weight.Bold))
-            p.drawText(QRectF(cx - fw/2, cy - fw*0.1, fw, fw*0.2),
-                       Qt.AlignmentFlag.AlignCenter, "J.A.R.V.I.S")
-
-        # particles
+        # Particles (Solar Flares)
         for pt in self._particles:
             a = max(0, min(255, int(pt[4] * 255)))
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QBrush(qcol(C.PRI, a)))
-            p.drawEllipse(QPointF(pt[0], pt[1]), 2.5, 2.5)
+            c = QColor(255, 230, 150, a) if pt[4] > 0.5 else QColor(255, 100, 0, a)
+            p.setBrush(QBrush(c))
+            psize = pt[4] * 4.0
+            p.drawEllipse(QPointF(pt[0], pt[1]), psize, psize)
 
-        # status text
-        sy = cy + fw * 0.40
+        if not getattr(self, "mini_mode", False):
+            # Detailed Tech HUD Framing
+            m = fw * 0.04
+            p.setPen(QPen(qcol(C.PRI, 180), 2))
+            
+            # Corners
+            L = 35
+            p.drawLine(QPointF(cx - fw/2 + m, cy - fw/2 + m + L), QPointF(cx - fw/2 + m, cy - fw/2 + m))
+            p.drawLine(QPointF(cx - fw/2 + m, cy - fw/2 + m), QPointF(cx - fw/2 + m + L, cy - fw/2 + m))
+            p.drawLine(QPointF(cx + fw/2 - m, cy - fw/2 + m + L), QPointF(cx + fw/2 - m, cy - fw/2 + m))
+            p.drawLine(QPointF(cx + fw/2 - m, cy - fw/2 + m), QPointF(cx + fw/2 - m - L, cy - fw/2 + m))
+            p.drawLine(QPointF(cx - fw/2 + m, cy + fw/2 - m - L), QPointF(cx - fw/2 + m, cy + fw/2 - m))
+            p.drawLine(QPointF(cx - fw/2 + m, cy + fw/2 - m), QPointF(cx - fw/2 + m + L, cy + fw/2 - m))
+            p.drawLine(QPointF(cx + fw/2 - m, cy + fw/2 - m - L), QPointF(cx + fw/2 - m, cy + fw/2 - m))
+            p.drawLine(QPointF(cx + fw/2 - m, cy + fw/2 - m), QPointF(cx + fw/2 - m - L, cy + fw/2 - m))
+            
+            # Thick accents
+            p.setPen(QPen(qcol(C.ACC, 220), 4))
+            p.drawLine(QPointF(cx - fw/2 + m + 6, cy - fw/2 + m + 6), QPointF(cx - fw/2 + m + 22, cy - fw/2 + m + 6))
+            p.drawLine(QPointF(cx + fw/2 - m - 6, cy + fw/2 - m - 6), QPointF(cx + fw/2 - m - 22, cy + fw/2 - m - 6))
+
+        # Status text
+        sy = cy + fw * 0.43
         if self.muted:
             txt, col = "⊘  MUTED",     qcol(C.MUTED_C)
         elif self.speaking:
@@ -490,12 +452,12 @@ class HudCanvas(QWidget):
             txt, col = f"{sym}  {self.state}", qcol(C.PRI)
 
         p.setPen(QPen(col, 1))
-        fs2 = 7 if getattr(self, "mini_mode", False) else 11
+        fs2 = 7 if getattr(self, "mini_mode", False) else 10
         p.setFont(QFont("Courier New", fs2, QFont.Weight.Bold))
         p.drawText(QRectF(0, sy, W, 26), Qt.AlignmentFlag.AlignCenter, txt)
 
-        # waveform
-        wy = sy + (10 if getattr(self, "mini_mode", False) else 30)
+        # Waveform
+        wy = sy + (10 if getattr(self, "mini_mode", False) else 26)
         N = 12 if getattr(self, "mini_mode", False) else 36
         bw = 4 if getattr(self, "mini_mode", False) else 8
         wx0 = (W - N * bw) / 2
@@ -505,6 +467,9 @@ class HudCanvas(QWidget):
             elif self.speaking:
                 hgt = random.randint(3, 20 if not getattr(self, "mini_mode", False) else 10)
                 cl  = qcol(C.PRI) if hgt > (12 if not getattr(self, "mini_mode", False) else 6) else qcol(C.PRI_DIM)
+            elif self.state == "LISTENING" and self.mic_level > 0:
+                hgt = int((3 if not getattr(self, "mini_mode", False) else 1) + self.mic_level * (20 if not getattr(self, "mini_mode", False) else 10))
+                cl  = qcol(C.ACC) if hgt > (12 if not getattr(self, "mini_mode", False) else 6) else qcol(C.PRI)
             else:
                 hgt = int((3 if not getattr(self, "mini_mode", False) else 1) + 2 * math.sin(self._tick * 0.09 + i * 0.6))
                 cl  = qcol(C.BORDER_B)
@@ -1022,6 +987,7 @@ class SetupOverlay(QWidget):
 class MainWindow(QMainWindow):
     _log_sig   = pyqtSignal(str)
     _state_sig = pyqtSignal(str)
+    _mic_sig   = pyqtSignal(float)
 
     def __init__(self, face_path: str, mini_mode: bool = False):
         super().__init__()
@@ -1101,6 +1067,7 @@ class MainWindow(QMainWindow):
             self._log_sig.connect(self._log.append_log)
             
         self._state_sig.connect(self._apply_state)
+        self._mic_sig.connect(self._apply_mic)
 
         self._overlay: SetupOverlay | None = None
         self._ready = self._check_config()
@@ -1194,7 +1161,7 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_badge("MARK XXXIX", C.PRI_DIM))
+        lay.addWidget(_badge("Jarvis", C.PRI_DIM))
         lay.addStretch()
 
         mid = QVBoxLayout(); mid.setSpacing(1)
@@ -1408,7 +1375,7 @@ class MainWindow(QMainWindow):
 
         lay.addWidget(_fl("[F4] Mute  ·  [F11] Fullscreen"))
         lay.addStretch()
-        lay.addWidget(_fl("FatihMakes Industries  ·  MARK XXXIX  ·  CLASSIFIED"))
+        lay.addWidget(_fl("FatihMakes Industries  ·  Jarvis  ·  CLASSIFIED"))
         lay.addStretch()
         lay.addWidget(_fl("© STARK INDUSTRIES", C.PRI_DIM))
         return w
@@ -1471,6 +1438,9 @@ class MainWindow(QMainWindow):
     def _apply_state(self, state: str):
         self.hud.state    = state
         self.hud.speaking = (state == "SPEAKING")
+
+    def _apply_mic(self, level: float):
+        self.hud.mic_level = level
 
     def _check_config(self) -> bool:
         if not API_FILE.exists(): return False
@@ -1564,6 +1534,9 @@ class JarvisUI:
 
     def set_state(self, state: str):
         self._win._state_sig.emit(state)
+
+    def set_mic_level(self, level: float):
+        self._win._mic_sig.emit(level)
 
     def write_log(self, text: str):
         self._win._log_sig.emit(text)

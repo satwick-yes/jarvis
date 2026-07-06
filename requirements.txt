@@ -20,7 +20,6 @@ win10toast
 send2trash
 youtube-transcript-api
 pywinauto
-pyaudio
 PyQt6
 PyPDF2
 python-docx
@@ -29,5 +28,5 @@ pdfplumber
 python-pptx
 pydub
 reportlab
-SpeechRecognition
 anthropic
+vosk

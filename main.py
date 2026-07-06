@@ -31,9 +31,15 @@ import traceback
 import os
 import psutil
 from pathlib import Path
+import numpy as np
 
 def _enforce_single_instance():
     current_pid = os.getpid()
+    try:
+        with open("jarvis.pid", "w") as f:
+            f.write(str(current_pid))
+    except Exception:
+        pass
     for p in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             name = p.info.get('name')
@@ -49,6 +55,9 @@ _enforce_single_instance()
 import sounddevice as sd
 from google import genai
 from google.genai import types
+import urllib.request
+import zipfile
+import winsound
 from ui import JarvisUI
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
@@ -135,6 +144,14 @@ def _update_memory_async(user_text: str, jarvis_text: str) -> None:
             print(f"[Memory] ⚠️ {e}")
 
 TOOL_DECLARATIONS = [
+    {
+        "name": "go_to_sleep",
+        "description": "Shuts down Jarvis. Use this when the user says 'go to sleep', 'goodbye', 'close yourself', or indicates they are done talking to you. The application will completely close and wait in the background until woken up.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
     {
         "name": "open_app",
         "description": (
@@ -511,9 +528,9 @@ TOOL_DECLARATIONS = [
     "name": "shutdown_jarvis",
     "description": (
         "Shuts down the assistant completely. "
-        "Call this when the user expresses intent to end the conversation, "
+        "Call this ONLY when the user EXPLICITLY expresses intent to end the conversation, "
         "close the assistant, say goodbye, or stop Jarvis. "
-        "The user can say this in ANY language."
+        "DO NOT call this if the speech is unclear or if the user is just talking in the background."
     ),
     "parameters": {
         "type": "OBJECT",
@@ -629,6 +646,13 @@ class JarvisLive:
         self._loop          = None
         self._is_speaking   = False
         self._speaking_lock = threading.Lock()
+        
+        # New Lock and Timeout state
+        import time
+        self.is_busy = False
+        self.last_input_time = time.time()
+        
+        
         self.ui.on_text_command = self._on_text_command
 
     def _on_text_command(self, text: str):
@@ -711,7 +735,12 @@ class JarvisLive:
 
         print(f"[JARVIS] 🔧 {name}  {args}")
         self.ui.set_state("THINKING")
-        if name == "save_memory":
+        if name == "go_to_sleep":
+            self.ui.write_log("SYS: Shutting down.")
+            import sys
+            sys.exit(0)
+            result = "Going to sleep now. Goodbye!"
+        elif name == "save_memory":
             category = args.get("category", "notes")
             key      = args.get("key", "")
             value    = args.get("value", "")
@@ -873,7 +902,14 @@ class JarvisLive:
         def callback(indata, frames, time_info, status):
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
-            if not jarvis_speaking and not self.ui.muted:
+
+            if indata.size > 0:
+                rms = np.sqrt(np.mean(indata**2))
+                vol = float(min(1.0, rms / 3000.0))
+                if hasattr(self, 'ui') and hasattr(self.ui, 'set_mic_level'):
+                    self.ui.set_mic_level(vol)
+
+            if not jarvis_speaking and not self.ui.muted and getattr(self, 'is_busy', False) == False:
                 data = indata.tobytes()
                 loop.call_soon_threadsafe(
                     self.out_queue.put_nowait,
@@ -919,6 +955,8 @@ class JarvisLive:
                             txt = sc.input_transcription.text.strip()
                             if txt:
                                 in_buf.append(txt)
+                                import time
+                                self.last_input_time = time.time()
 
                         if sc.turn_complete:
                             self.set_speaking(False)
@@ -941,6 +979,8 @@ class JarvisLive:
                                 ).start()
 
                     if response.tool_call:
+                        self.is_busy = True
+                        self.ui.set_state("PROCESSING")
                         fn_responses = []
                         for fc in response.tool_call.function_calls:
                             print(f"[JARVIS] 📞 {fc.name}")
@@ -949,6 +989,8 @@ class JarvisLive:
                         await self.session.send_tool_response(
                             function_responses=fn_responses
                         )
+                        self.is_busy = False
+                        self.ui.set_state("LISTENING")
 
         except Exception as e:
             print(f"[JARVIS] ❌ Recv: {e}")
@@ -987,6 +1029,7 @@ class JarvisLive:
 
         while True:
             try:
+
                 print("[JARVIS] 🔌 Connecting...")
                 self.ui.set_state("THINKING")
                 config = self._build_config()
@@ -997,26 +1040,42 @@ class JarvisLive:
                 ):
                     self.session        = session
                     self._loop          = asyncio.get_event_loop()
+                    
+                    import concurrent.futures
+                    self._loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=100))
+                    
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue      = asyncio.Queue(maxsize=10)
+                    
 
                     print("[JARVIS] ✅ Connected.")
                     self.ui.set_state("LISTENING")
                     self.ui.write_log("SYS: JARVIS online.")
-
-                    tg.create_task(self._send_realtime())
-                    tg.create_task(self._listen_audio())
-                    tg.create_task(self._receive_audio())
-                    tg.create_task(self._play_audio())
                     
+                    try:
+                        await session.send(input="The user just woke you up. Please say a very short, cool greeting (like 'I am online' or 'At your service') so they know you are listening.", end_of_turn=True)
+                    except:
+                        pass
+
+                    t1 = tg.create_task(self._send_realtime())
+                    t2 = tg.create_task(self._listen_audio())
+                    t3 = tg.create_task(self._receive_audio())
+                    t4 = tg.create_task(self._play_audio())
+                    
+                    while True:
+                        await asyncio.sleep(3600)
+                    
+            except asyncio.CancelledError:
+                pass
             except Exception as e:
                 print(f"[JARVIS] ⚠️ {e}")
                 traceback.print_exc()
 
+            self.session = None
             self.set_speaking(False)
             self.ui.set_state("THINKING")
-            print("[JARVIS] 🔄 Reconnecting in 3s...")
-            await asyncio.sleep(3)
+            print("[JARVIS] 🔄 Disconnected.")
+            await asyncio.sleep(1)
 
 def main():
     ui = JarvisUI("face.png", mini_mode=True)

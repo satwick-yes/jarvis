@@ -25,6 +25,8 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 import google.generativeai as genai
 
 
