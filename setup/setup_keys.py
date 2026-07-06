@@ -6,13 +6,12 @@ def setup_api_keys():
     print("Welcome to Jarvis Setup!")
     print("This script will help you configure your API keys.\n")
 
-    # Path to the config directory and api_keys.json
-    base_dir = Path(__file__).parent
+    base_dir = Path(__file__).resolve().parent.parent
     config_dir = base_dir / "config"
     api_key_file = config_dir / "api_keys.json"
-
+    
     # Ensure the config directory exists
-    config_dir.mkdir(exist_ok=True)
+    config_dir.mkdir(exist_ok=True, parents=True)
 
     # Load existing config or create a new one
     keys = {}
