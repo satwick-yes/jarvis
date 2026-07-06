@@ -7,14 +7,20 @@ from pptx.oxml.xmlchemy import OxmlElement
 
 def add_fade_transition(slide):
     """Injects a fade transition into the slide's XML"""
+    if slide.element.xpath('./p:transition'):
+        return
+        
     transition = OxmlElement('p:transition')
     fade = OxmlElement('p:fade')
     transition.append(fade)
     
-    # p:cSld is always the first child in a valid p:sld element
-    cSld = slide.element.xpath('./p:cSld')
-    if cSld:
-        cSld[0].addnext(transition)
+    clrMapOvr = slide.element.xpath('./p:clrMapOvr')
+    if clrMapOvr:
+        clrMapOvr[0].addnext(transition)
+    else:
+        cSld = slide.element.xpath('./p:cSld')
+        if cSld:
+            cSld[0].addnext(transition)
 
 def apply_background(slide):
     """Applies a sleek dark background to the slide"""

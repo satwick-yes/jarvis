@@ -67,8 +67,14 @@ def launch_jarvis():
     log_msg("Launching Jarvis UI (no console)...")
     
     try:
-        pythonw_path = sys.executable.replace("python.exe", "pythonw.exe")
-        subprocess.Popen([pythonw_path, "main.py"], cwd=str(BASE_DIR))
+        python_path = sys.executable.replace("pythonw.exe", "python.exe")
+        subprocess.Popen(
+            [python_path, "main.py"], 
+            cwd=str(BASE_DIR), 
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
         log_msg("Jarvis spawned. Listener exiting...")
         os._exit(0)
     except Exception as e:
@@ -87,38 +93,24 @@ def setup_vosk():
 def main():
     clear_log()
     log_msg("Initializing background listener...")
+    
+    device_name = sd.query_devices(sd.default.device[0], 'input')['name']
+    log_msg(f"Using default device: {device_name}")
+    
     recognizer = setup_vosk()
     
     log_msg("Waiting for wake word in background...")
     
+    import queue
+    q = queue.Queue()
+    
     def callback(indata, frames, time_info, status):
         if status:
             pass 
-        
-        data = indata.tobytes()
-        try:
-            if recognizer.AcceptWaveform(data):
-                res = json.loads(recognizer.Result())
-                text = res.get("text", "").lower()
-                if text:
-                    log_msg(f"Recognized: {text}")
-                if "jarvis" in text:
-                    log_msg(f"Wake word matched in full result: {text}")
-                    threading.Thread(target=launch_jarvis).start()
-            else:
-                res = json.loads(recognizer.PartialResult())
-                text = res.get("partial", "").lower()
-                if text:
-                    pass
-                if "jarvis" in text:
-                    log_msg(f"Wake word matched in partial result: {text}")
-                    threading.Thread(target=launch_jarvis).start()
-                    time.sleep(2)
-        except Exception as e:
-            log_msg(f"Callback error: {e}")
+        q.put(bytes(indata))
 
     try:
-        with sd.InputStream(
+        with sd.RawInputStream(
             samplerate=16000,
             channels=1,
             dtype="int16",
@@ -127,10 +119,38 @@ def main():
         ):
             log_msg("Listening stream active...")
             while True:
-                time.sleep(0.5)
+                data = q.get()
+                
+                try:
+                    if recognizer.AcceptWaveform(data):
+                        res = json.loads(recognizer.Result())
+                        text = res.get("text", "").lower()
+                        if text:
+                            log_msg(f"Recognized: {text}")
+                        if "jarvis" in text:
+                            log_msg(f"Wake word matched in full result: {text}")
+                            threading.Thread(target=launch_jarvis).start()
+                    else:
+                        res = json.loads(recognizer.PartialResult())
+                        text = res.get("partial", "").lower()
+                        if "jarvis" in text:
+                            log_msg(f"Wake word matched in partial result: {text}")
+                            threading.Thread(target=launch_jarvis).start()
+                            # Flush the queue to avoid immediate double-triggering
+                            while not q.empty():
+                                try: q.get_nowait()
+                                except: pass
+                            time.sleep(2)
+                except Exception as e:
+                    log_msg(f"Processing error: {e}")
     except Exception as e:
         log_msg(f"Listener stream error: {e}")
         time.sleep(2)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        with open(str(VA_DIR / "listener_error.log"), "a") as f:
+            f.write(traceback.format_exc() + "\n")

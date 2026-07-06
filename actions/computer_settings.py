@@ -509,8 +509,13 @@ ACTION_MAP: dict[str, callable] = {
     "screen_off":          sleep_display,
     "pause_video":         pause_video,
     "play_pause":          pause_video,
+    "pause":               pause_video,
+    "play":                pause_video,
+    "play_video":          pause_video,
+    "resume":              pause_video,
     "close_app":           close_app,
     "close_window":        close_window,
+    "close":               close_app,
     "full_screen":         full_screen,
     "fullscreen":          full_screen,
     "minimize":            minimize_window,
@@ -610,6 +615,14 @@ def computer_settings(
 
     if not action:
         return "No action could be determined."
+
+    if action == "close":
+        if "tab" in description.lower():
+            action = "close_tab"
+        elif "window" in description.lower():
+            action = "close_window"
+        else:
+            action = "close_app"
 
     print(f"[Settings] Action: {action}  Value: {value}  OS: {_OS}")
     if player:

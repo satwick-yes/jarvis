@@ -101,7 +101,7 @@ LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-latest"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
-CHUNK_SIZE          = 4096
+CHUNK_SIZE          = 1024
 
 
 def _get_api_key() -> str:
@@ -703,9 +703,9 @@ class JarvisLive:
             f"[CURRENT DATE & TIME]\n"
             f"Right now it is: {time_str}\n"
             f"Use this to calculate exact times for reminders.\n\n"
-            f"[CRITICAL LANGUAGE INSTRUCTION]\n"
-            f"You MUST automatically detect the language the user is speaking in.\n"
-            f"Whatever language the user speaks, you MUST respond natively in that EXACT same language (DO NOT default to English).\n\n"
+            f"[CRITICAL LANGUAGE & SPEECH INSTRUCTION]\n"
+            f"You MUST automatically detect the language the user is speaking in and respond in that EXACT same language. If they speak English, ALWAYS respond in English. Do NOT switch languages randomly.\n"
+            f"IMPORTANT: Speak slowly, calmly, and clearly. Do not rush your words or speak too fast.\n\n"
         )
 
         parts = [time_ctx]
@@ -1053,6 +1053,8 @@ class JarvisLive:
                     self.ui.write_log("SYS: JARVIS online.")
                     
                     try:
+                        import winsound
+                        winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
                         await session.send(input="The user just woke you up. Please say a very short, cool greeting (like 'I am online' or 'At your service') so they know you are listening.", end_of_turn=True)
                     except:
                         pass

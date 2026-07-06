@@ -28,14 +28,37 @@ def is_jarvis_running():
     return False
 
 def main():
-    pythonw_path = sys.executable.replace("python.exe", "pythonw.exe")
+    python_path = sys.executable.replace("pythonw.exe", "python.exe")
     listener_path = str(BASE_DIR / "voice_activation" / "listener.py")
     
+    with open(str(BASE_DIR / "daemon_verbose.log"), "w") as f:
+        f.write("Daemon started!\n")
+        
     while True:
-        if is_jarvis_running():
-            time.sleep(2)
-        else:
-            subprocess.run([pythonw_path, listener_path], cwd=str(BASE_DIR))
+        try:
+            with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
+                f.write("Checking if Jarvis is running...\n")
+                
+            if is_jarvis_running():
+                with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
+                    f.write("Jarvis is running, sleeping...\n")
+                time.sleep(2)
+            else:
+                with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
+                    f.write("Jarvis is NOT running, launching listener...\n")
+                subprocess.run(
+                    [python_path, listener_path], 
+                    cwd=str(BASE_DIR), 
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
+                    f.write("Listener finished, sleeping...\n")
+                time.sleep(2)
+        except Exception as e:
+            with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
+                f.write("ERROR: " + str(e) + "\n")
             time.sleep(2)
 
 if __name__ == "__main__":
