@@ -1,4 +1,8 @@
 import sys
+import os
+from pathlib import Path
+os.chdir(Path(__file__).resolve().parent)
+
 if sys.stdout and sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
 if sys.stderr and sys.stderr.encoding != 'utf-8':
@@ -32,6 +36,40 @@ import os
 import psutil
 from pathlib import Path
 import numpy as np
+import ctypes
+
+def _require_admin():
+    import subprocess
+    try:
+        is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        is_admin = False
+        
+    task_name = "JarvisAdminTask"
+    
+    try:
+        result = subprocess.run(["schtasks", "/query", "/tn", task_name], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        task_exists = (result.returncode == 0)
+    except Exception:
+        task_exists = False
+    
+    if not is_admin:
+        if task_exists:
+            subprocess.run(["schtasks", "/run", "/tn", task_name], creationflags=subprocess.CREATE_NO_WINDOW)
+            sys.exit()
+        else:
+            cwd = os.path.dirname(os.path.abspath(__file__))
+            script = os.path.abspath(__file__)
+            ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{script}"', cwd, 1)
+            sys.exit()
+    else:
+        if not task_exists:
+            script_path = os.path.abspath(__file__)
+            python_path = sys.executable
+            cmd = f'schtasks /create /tn "{task_name}" /tr "\\"{python_path}\\" \\"{script_path}\\"" /sc once /st 00:00 /rl highest /f'
+            subprocess.run(cmd, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+
+_require_admin()
 
 def _enforce_single_instance():
     current_pid = os.getpid()
