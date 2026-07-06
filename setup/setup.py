@@ -15,7 +15,7 @@ if platform.system() == "Windows":
     try:
         jarvis_dir = Path(__file__).resolve().parent.parent
         pythonw_path = sys.executable.replace("python.exe", "pythonw.exe")
-        vbs_code = f"""Set WshShell = CreateObject("WScript.Shell")\nWshShell.CurrentDirectory = "{jarvis_dir}"\nWshShell.Run "{pythonw_path} voice_activation\\daemon.py", 0\nSet WshShell = Nothing\n"""
+        vbs_code = f"""Set WshShell = CreateObject("WScript.Shell")\nWshShell.CurrentDirectory = "{jarvis_dir}"\nWshShell.Run "{pythonw_path} voice_activation\\listener.py", 0\nSet WshShell = Nothing\n"""
         
         startup_dir = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
         if startup_dir.exists():
