@@ -75,8 +75,7 @@ def launch_jarvis():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
-        log_msg("Jarvis spawned. Listener exiting...")
-        os._exit(0)
+        log_msg("Jarvis spawned.")
     except Exception as e:
         log_msg(f"Failed to launch Jarvis: {e}")
 
@@ -99,53 +98,69 @@ def main():
     
     recognizer = setup_vosk()
     
-    log_msg("Waiting for wake word in background...")
-    
     import queue
-    q = queue.Queue()
     
-    def callback(indata, frames, time_info, status):
-        if status:
-            pass 
-        q.put(bytes(indata))
+    while True:
+        if is_jarvis_running():
+            time.sleep(2)
+            continue
+            
+        log_msg("Waiting for wake word in background...")
+        q = queue.Queue()
+        
+        def callback(indata, frames, time_info, status):
+            if status:
+                pass 
+            q.put(bytes(indata))
 
-    try:
-        with sd.RawInputStream(
-            samplerate=16000,
-            channels=1,
-            dtype="int16",
-            blocksize=8000,
-            callback=callback
-        ):
-            log_msg("Listening stream active...")
-            while True:
-                data = q.get()
-                
-                try:
-                    if recognizer.AcceptWaveform(data):
-                        res = json.loads(recognizer.Result())
-                        text = res.get("text", "").lower()
-                        if text:
-                            log_msg(f"Recognized: {text}")
-                        if "jarvis" in text:
-                            log_msg(f"Wake word matched in full result: {text}")
-                            threading.Thread(target=launch_jarvis).start()
-                    else:
-                        res = json.loads(recognizer.PartialResult())
-                        text = res.get("partial", "").lower()
-                        if "jarvis" in text:
-                            log_msg(f"Wake word matched in partial result: {text}")
-                            threading.Thread(target=launch_jarvis).start()
-                            # Flush the queue to avoid immediate double-triggering
-                            while not q.empty():
-                                try: q.get_nowait()
-                                except: pass
-                            time.sleep(2)
-                except Exception as e:
-                    log_msg(f"Processing error: {e}")
-    except Exception as e:
-        log_msg(f"Listener stream error: {e}")
-        time.sleep(2)
+        try:
+            with sd.RawInputStream(
+                samplerate=16000,
+                channels=1,
+                dtype="int16",
+                blocksize=8000,
+                callback=callback
+            ):
+                log_msg("Listening stream active...")
+                last_check = time.time()
+                while True:
+                    try:
+                        data = q.get(timeout=0.5)
+                        has_data = True
+                    except queue.Empty:
+                        has_data = False
+                        
+                    if time.time() - last_check > 2.0:
+                        if is_jarvis_running():
+                            log_msg("Jarvis is running. Pausing listener...")
+                            break
+                        last_check = time.time()
+                        
+                    if not has_data:
+                        continue
+                        
+                    try:
+                        if recognizer.AcceptWaveform(data):
+                            res = json.loads(recognizer.Result())
+                            text = res.get("text", "").lower()
+                            if text:
+                                log_msg(f"Recognized: {text}")
+                            if "jarvis" in text:
+                                log_msg(f"Wake word matched in full result: {text}")
+                                launch_jarvis()
+                                break
+                        else:
+                            res = json.loads(recognizer.PartialResult())
+                            text = res.get("partial", "").lower()
+                            if "jarvis" in text:
+                                log_msg(f"Wake word matched in partial result: {text}")
+                                launch_jarvis()
+                                break
+                    except Exception as e:
+                        log_msg(f"Processing error: {e}")
+        except Exception as e:
+            log_msg(f"Listener stream error: {e}")
+            time.sleep(2)
 
 if __name__ == "__main__":
     try:

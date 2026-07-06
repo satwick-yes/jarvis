@@ -3,6 +3,7 @@ import subprocess
 import psutil
 import sys
 import os
+import datetime
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,25 +28,28 @@ def is_jarvis_running():
             pass
     return False
 
+def log_daemon(msg):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
+            f.write(f"[{timestamp}] {msg}\n")
+    except:
+        pass
+
 def main():
     python_path = sys.executable.replace("pythonw.exe", "python.exe")
     listener_path = str(BASE_DIR / "voice_activation" / "listener.py")
     
     with open(str(BASE_DIR / "daemon_verbose.log"), "w") as f:
-        f.write("Daemon started!\n")
+        f.write("=== Daemon Started ===\n")
         
     while True:
         try:
-            with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
-                f.write("Checking if Jarvis is running...\n")
-                
             if is_jarvis_running():
-                with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
-                    f.write("Jarvis is running, sleeping...\n")
+                # log_daemon("Jarvis is running, sleeping...")
                 time.sleep(2)
             else:
-                with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
-                    f.write("Jarvis is NOT running, launching listener...\n")
+                log_daemon("Jarvis is NOT running, launching listener...")
                 subprocess.run(
                     [python_path, listener_path], 
                     cwd=str(BASE_DIR), 
@@ -53,12 +57,10 @@ def main():
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
-                with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
-                    f.write("Listener finished, sleeping...\n")
+                log_daemon("Listener finished, sleeping...")
                 time.sleep(2)
         except Exception as e:
-            with open(str(BASE_DIR / "daemon_verbose.log"), "a") as f:
-                f.write("ERROR: " + str(e) + "\n")
+            log_daemon(f"ERROR: {e}")
             time.sleep(2)
 
 if __name__ == "__main__":
