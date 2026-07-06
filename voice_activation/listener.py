@@ -50,10 +50,21 @@ def clear_log():
         pass
 
 def is_jarvis_running():
+    try:
+        pid_file = BASE_DIR / "jarvis.pid"
+        if pid_file.exists():
+            pid = int(pid_file.read_text().strip())
+            if psutil.pid_exists(pid):
+                p = psutil.Process(pid)
+                if 'py' in p.name().lower() and any('main.py' in str(c) for c in p.cmdline()):
+                    return True
+    except Exception:
+        pass
+
     for p in psutil.process_iter(['name', 'cmdline']):
         try:
-            name = p.info.get('name')
-            if name and 'python' in name.lower():
+            name = p.info.get('name', '')
+            if name and ('python' in name.lower() or 'py' in name.lower()):
                 cmd = p.info.get('cmdline')
                 if cmd and any('main.py' in str(c) for c in cmd):
                     return True
@@ -86,8 +97,7 @@ def setup_vosk():
         log_msg("Vosk model not found. Please ensure it was extracted.")
         sys.exit(1)
     
-    model = vosk.Model(str(model_dir))
-    return vosk.KaldiRecognizer(model, 16000)
+    return vosk.Model(str(model_dir))
 
 def main():
     clear_log()
@@ -96,7 +106,7 @@ def main():
     device_name = sd.query_devices(sd.default.device[0], 'input')['name']
     log_msg(f"Using default device: {device_name}")
     
-    recognizer = setup_vosk()
+    model = setup_vosk()
     
     import queue
     
@@ -105,6 +115,7 @@ def main():
             time.sleep(2)
             continue
             
+        recognizer = vosk.KaldiRecognizer(model, 16000)
         log_msg("Waiting for wake word in background...")
         q = queue.Queue()
         
