@@ -10,3 +10,5 @@ venv/
 config/api_keys.json
 *.log
 *.pid
+
+voice_activation/vosk-model-*

@@ -32,7 +32,7 @@ def main():
     print(f"\nUsing device: {device_info['name']}")
 
     print("Loading voice model...")
-    model = vosk.Model("voice_activation/vosk-model-small-en-us-0.15")
+    model = vosk.Model("voice_activation/vosk-model-en-in-0.5")
     recognizer = vosk.KaldiRecognizer(model, 16000)
 
     print("\n--- Listening... Please say something (Press Ctrl+C to stop) ---")

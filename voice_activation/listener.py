@@ -92,7 +92,7 @@ def launch_jarvis():
 
 def setup_vosk():
     vosk.SetLogLevel(-1)
-    model_dir = VA_DIR / "vosk-model-small-en-us-0.15"
+    model_dir = VA_DIR / "vosk-model-en-in-0.5"
     if not model_dir.exists():
         log_msg("Vosk model not found. Please ensure it was extracted.")
         sys.exit(1)

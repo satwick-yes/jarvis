@@ -37,7 +37,7 @@ def check_requirements():
     return True, "All dependencies are installed properly."
 
 def check_vosk():
-    model_dir = Path("voice_activation/vosk-model-small-en-us-0.15")
+    model_dir = Path("voice_activation/vosk-model-en-in-0.5")
     if model_dir.exists() and model_dir.is_dir():
         return True, "Vosk voice model is installed and extracted correctly."
     return False, "Vosk model missing or not extracted."

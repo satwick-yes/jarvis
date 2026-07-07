@@ -12,6 +12,13 @@ python setup\setup.py
 
 echo.
 echo ===================================================
+echo Step 1.5: Downloading Voice Recognition Model
+echo ===================================================
+echo.
+python setup\download_vosk.py
+
+echo.
+echo ===================================================
 echo Step 2: Configuring API Keys
 echo ===================================================
 echo.
