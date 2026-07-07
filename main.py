@@ -899,6 +899,12 @@ class JarvisLive:
         print("[JARVIS] 🎤 Mic started")
         loop = asyncio.get_event_loop()
 
+        def _enqueue_safely(data):
+            try:
+                self.out_queue.put_nowait({"data": data, "mime_type": "audio/pcm"})
+            except asyncio.QueueFull:
+                pass
+
         def callback(indata, frames, time_info, status):
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
@@ -911,10 +917,7 @@ class JarvisLive:
 
             if not jarvis_speaking and not self.ui.muted and getattr(self, 'is_busy', False) == False:
                 data = indata.tobytes()
-                loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait,
-                    {"data": data, "mime_type": "audio/pcm"}
-                )
+                loop.call_soon_threadsafe(_enqueue_safely, data)
 
         try:
             with sd.InputStream(
@@ -1013,6 +1016,8 @@ class JarvisLive:
                 chunk = await self.audio_in_queue.get()
                 self.set_speaking(True)
                 await asyncio.to_thread(stream.write, chunk)
+                if self.audio_in_queue.empty():
+                    self.set_speaking(False)
         except Exception as e:
             print(f"[JARVIS] ❌ Play: {e}")
             raise
