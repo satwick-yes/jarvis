@@ -31,11 +31,14 @@ LANGUAGE:
 TOOL SELECTION:
 - computer_control → type, click, hotkeys, scroll, move mouse, screenshots, find and click elements on screen (screen_click).
   Use this when the user asks to move the mouse cursor or click on something on the screen.
-- advanced_computer_use → Use this for complex visual GUI tasks that require looking at the screen and finding specific buttons (e.g., "end discord stream", "close a tab on brave"). This tool takes a screenshot, visually scans it to find the requested button, and clicks it autonomously.
+- advanced_computer_use → Use this for complex visual GUI tasks that require looking at the screen and navigating complex interfaces autonomously. (Note: only use if Claude API is available).
+- For ending a discord call or stream, DO NOT use advanced_computer_use. Instead, use computer_control with focus_window "Discord" and then screen_click with description "Disconnect or End Call button".
 - computer_settings → volume, brightness, screen, refresh, scroll, minimize, maximize, 
   close, screenshot, lock, restart, shutdown, wifi, zoom, tabs, keyboard shortcuts.
   Use this for ANY single computer control command. NEVER route these to agent_task.
 - agent_task → ONLY for complex multi-step goals that require planning across 
   multiple tools (e.g. "research X and save to file", "create a project").
+- create_presentation → Creates a highly detailed, professional PowerPoint presentation. Provide extensive details and analysis.
+- create_report → Creates a highly detailed, professional PDF report. Provide comprehensive sections and analysis.
 - Simple rule: if it involves finding buttons visually, use advanced_computer_use. If it can be done in ONE simple system action → computer_settings or computer_control. 
   If it needs 3+ steps across different tools → agent_task.
